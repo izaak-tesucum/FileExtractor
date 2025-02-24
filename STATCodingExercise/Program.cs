@@ -69,6 +69,8 @@ foreach (var zipChunk in zipFileChunks)
     {
         Log.Error(e.Message);
     }
+
+    Log.Information("\n");
 }
 Log.Information("\n");
 Log.CloseAndFlush();
