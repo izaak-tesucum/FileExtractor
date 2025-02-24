@@ -26,8 +26,8 @@ namespace STATCodingExercise.Services
 
         public async Task ProcessAndUploadFiles(Dictionary<string, List<string>> poToAttachmentMapper, string folder, List<ProcessedFileRecord> unProcessedFileRecords)
         {
-            var fileRecordDictionary = unProcessedFileRecords.ToDictionary(r => r.FileName);
-            var semaphore = new SemaphoreSlim(5);
+            var fileRecordDictionary = unProcessedFileRecords.ToDictionary(r => r.FileName); //Convert records list to dictionary for quicker access
+            var semaphore = new SemaphoreSlim(5); //up to 5 concurrent requests to reduce any overload when uploading to s3 bucket or dynamo db table
 
             Log.Information("Starting Upload Process...");
             foreach (var poNum in poToAttachmentMapper.Keys)
@@ -45,7 +45,7 @@ namespace STATCodingExercise.Services
                     await semaphore.WaitAsync();
                     try
                     {
-                        if (!completedFilesByPO.Contains(file))
+                        if (!completedFilesByPO.Contains(file)) // only process files that are not completed/uploaded yet by PO Number
                         {
                             if (!fileRecordDictionary.TryGetValue(file, out var unProcessedFileRecord))
                             {
@@ -115,9 +115,6 @@ namespace STATCodingExercise.Services
                         semaphore.Release();
                     }
                 }));
-
-                //await Task.WhenAll(fileTasks);
-                //await _dynamoDbService.BatchSaveProcessedFileRecords(unProcessedFileRecords.Where(r => poToAttachmentMapper[poNum].Contains(r.FileName)).ToList()); // batch update logs for attachment files.
             }
             Log.Information("Upload Process Complete.");
         }
