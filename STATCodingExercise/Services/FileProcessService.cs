@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -26,9 +27,9 @@ namespace STATCodingExercise.Services
 
         public async Task<List<string>> ExtractZipFilesAsync(List<string> zipFiles, string bucket)
         {
-            List<string> extractedFolders = new();
+            ConcurrentBag<string> extractedFolders = new();
 
-            var extractTasks = zipFiles.Select(async zipFile => //Extract zip folder and delete once done, then add new folder to extracted folders list
+            await Parallel.ForEachAsync(zipFiles, new ParallelOptions { MaxDegreeOfParallelism=3 } , async (zipFile, token) => //Extract zip folder, then add new folder to extracted folders list
             {
                 string zipFilePath = Path.Combine(_tempDownloadPath, Path.GetFileName(zipFile));
 
@@ -46,19 +47,29 @@ namespace STATCodingExercise.Services
                     await Task.Run(() => ZipFile.ExtractToDirectory(zipFilePath, extractedFolder));
                     extractedFolders.Add(extractedFolder);
                     Log.Information("Extraction Complete.\n");
-
-                    if (File.Exists(zipFilePath))
-                        File.Delete(zipFilePath);
                 }
                 catch (Exception ex)
                 {
                     Log.Error($"Error extracting files from zipfile {zipFile}:\r\n{ex.Message}");
                 }
+                finally
+                {
+                    if (File.Exists(zipFilePath))
+                    {
+                        try
+                        {
+                            File.Delete(zipFilePath);
+                            Log.Information("Zipfile Deleted.\n");
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error($"Failed to delete zip {zipFile}:\r\n {ex.Message}.");
+                        }
+                    }
+                }
             });
 
-            await Task.WhenAll(extractTasks);
-
-            return extractedFolders;
+            return [.. extractedFolders];
         }
 
         public static Dictionary<string, List<string>> ParseCSVFiles(string folderPath)
